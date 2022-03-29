@@ -38,19 +38,25 @@ func (User) TableName() string {
 func main() {
 	//连接数据库
 	dsn := "root:123456@tcp(127.0.0.1:3306)/gorm_db?charset=utf8mb4&parseTime=true&loc=Local"
-	db, err := gorm.Open(mysql.New(mysql.Config{DSN: dsn}), &gorm.Config{})
+	db, err := gorm.Open(mysql.New(mysql.Config{DSN: dsn}), &gorm.Config{
+		//	一般手动禁用事务
+		SkipDefaultTransaction: true,
+	})
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
+
 	//创建表
 	err = db.AutoMigrate(&User{})
 	if err != nil {
 		fmt.Println()
 		return
 	}
-	//create(db)
-	//read(db)
+	create(db)
+	read(db)
+	update(db)
+	transaction(db)
 }
 
 func create(db *gorm.DB) {
@@ -77,4 +83,41 @@ func read(db *gorm.DB) {
 	user = User{}
 	db.Last(&user)
 	fmt.Println(user)
+}
+
+func update(db *gorm.DB) {
+	//保存更新所有字段 save
+	user := User{}
+	db.First(&user)
+	user.QQ = "3398341353"
+	user.Phone = "15736469310"
+	db.Save(&user)
+	//更新单个列 update
+	err := db.Model(&User{}).Where("id = ?", "2").Update("phone", "10102").Error
+	fmt.Println(err)
+	//更新多列 updates
+	err = db.Model(&User{}).Where("id=?", 3).Updates(map[string]interface{}{"qq": "123", "phone": "1111"}).Error
+	fmt.Println(err)
+}
+
+func transaction(db *gorm.DB) {
+	//手动开启事务
+	tx := db.Begin()
+	//遇到panic回滚
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+	if err := tx.Create(&User{Name: "Giraffe"}).Error; err != nil {
+		tx.Rollback()
+		return
+	}
+
+	if err := tx.Create(&User{Name: "Lion"}).Error; err != nil {
+		tx.Rollback()
+		return
+	}
+
+	tx.Commit()
 }
